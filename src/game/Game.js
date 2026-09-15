@@ -21,7 +21,8 @@ export class Game {
   const sun=new THREE.DirectionalLight(0xffffff,1.2);sun.position.set(30,50,20);sun.castShadow=false;this.scene.add(sun);
   this.track=new TrackManager(this.scene).load();this.race=new RaceManager(this.scene,this.track,save,audio);this.race.start();this.cam=new RaceCamera(this.camera);
   this.keys=new KeyboardControls();this.touch=new TouchControls(root.querySelector("#controls"));this.hud=root.querySelector("#hud");this.hud.innerHTML=hudHTML();
-  this.running=true;this.last=performance.now();this.count=3;this.countClock=0;this.race.time=0;
+  this.running=true;this.last=performance.now();this.count=3;this.countClock=0;this.race.time=0;this.startCountdown();
+  if(this.save.settings.control!=="TOUCH") root.querySelector("#controls").classList.add("hidden");
   this.resize=()=>{this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setSize(innerWidth,innerHeight);};
   addEventListener("resize",this.resize);this.loop();
  }

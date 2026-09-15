@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#050711" />
+  <meta name="description" content="NEON RACER 3D — an original mobile-first arcade racing PWA." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <title>NEON RACER 3D</title>
+</head>
+<body>
+  <div id="app">
+    <div id="loading-screen">
+      <div class="loading-logo">NEON RACER <span>3D</span></div>
+      <div class="loading-sub">INITIALIZING CIRCUIT</div>
+      <div class="loading-track"><div id="loading-bar"></div></div>
+      <div id="loading-text">Preparing track...</div>
+    </div>
+    <div id="menu-root"></div>
+    <div id="game-root" class="hidden">
+      <div id="webgl"></div>
+      <div id="hud"></div>
+      <div id="controls"></div>
+      <div id="portrait-hint">For the best racing experience, rotate your phone to landscape.</div>
+    </div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

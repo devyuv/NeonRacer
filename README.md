@@ -137,7 +137,12 @@ like richer music/SFX:
 
 **Touch:** on-screen LEFT / RIGHT steer buttons, BRAKE, and NITRO. The car
 auto-accelerates unless you're braking, so both thumbs stay free for steering and nitro.
-A TILT mode is also available in Settings (steer by tilting your phone).
+
+**Tilt steering:** tap the 📱 button in the top-right of the HUD (next to pause) at any
+time during a race to switch to tilt steering - just tilt the phone left/right instead of
+tapping buttons. The on-screen L / R buttons hide automatically while tilt is active, for
+a simpler two-button (brake + nitro) layout. Tap the button again to switch back. The same
+toggle is also available in Settings → Control Type, and both stay in sync.
 
 **Keyboard:** `W`/`↑` accelerate, `S`/`↓` brake, `A`/`←` and `D`/`→` steer, `SPACE` nitro.
 

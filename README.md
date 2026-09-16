@@ -1,109 +1,171 @@
 # NEON RACER 3D
 
-An original, mobile-first 3D arcade racing PWA built with Vite + Three.js. No backend or API keys are required.
+An original, mobile-first arcade 3D racing game built with **Three.js**, packaged as an
+installable **Progressive Web App**. Drift and boost through a neon-lit city circuit
+against 5 AI rivals, across Quick Race, Time Trial, Championship, and Free Drive modes.
 
-## Features
+Everything here — the car designs, track, UI, and sound — is original and generated
+procedurally in code. Nothing is copied from any existing game.
 
-- Third-person 3D racing camera
-- Procedural futuristic sports car and neon city circuit
-- Five AI opponents
-- Acceleration, braking, steering, drift feel and nitro
-- Touch + keyboard controls
-- 3-lap race loop, position, timer, speed and nitro HUD
-- Race results, restart and menu navigation
-- Local progress storage
-- Garage, tracks and settings screens
-- Web App Manifest + service worker
-- Responsive mobile/desktop layout
-- Graceful WebGL error
-- Graphics quality setting and device-pixel-ratio cap
-- Original procedural geometry; no external game assets are required
+---
 
-## Run locally
+## 1. Local development
 
-Install Node.js 18+ (Node 20+ recommended).
+Requires [Node.js](https://nodejs.org/) 18+.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite.
+Open the printed local URL (usually `http://localhost:5173`) in your browser. On your
+phone, use the "Network" URL Vite prints (same Wi-Fi network as your computer) to test
+touch controls on a real device.
 
-## Production build
+## 2. Production build
 
 ```bash
 npm run build
-npm run preview
+npm run preview   # optional: serve the production build locally to double check it
 ```
 
-The production files are created in `dist/`.
+The build output goes to `dist/`.
 
-## GitHub
+---
 
-1. Create a new empty repository on GitHub, for example `neon-racer-3d`.
-2. Extract this project folder.
-3. From the project folder:
+## 3. Deploy to GitHub + Vercel
 
+### Step 1 — Create a GitHub repository
+1. Go to [github.com/new](https://github.com/new) and create a new repository (e.g. `neon-racer-3d`).
+2. Do **not** initialize it with a README (you already have one here).
+
+### Step 2 — Push this project
+From inside this project folder:
 ```bash
 git init
 git add .
-git commit -m "Initial NEON RACER 3D"
+git commit -m "Initial commit: Neon Racer 3D"
 git branch -M main
-git remote add origin YOUR_GITHUB_REPOSITORY_URL
+git remote add origin https://github.com/YOUR_USERNAME/neon-racer-3d.git
 git push -u origin main
 ```
 
-You can also upload the files through GitHub's web interface.
+### Step 3 — Connect the repository to Vercel
+1. Go to [vercel.com/new](https://vercel.com/new) and sign in (GitHub login is easiest).
+2. Click **Import** next to your `neon-racer-3d` repository.
+3. Vercel auto-detects the **Vite** framework preset. Confirm these build settings:
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
+   - **Install Command:** `npm install`
+4. No environment variables are required — this game has no backend.
 
-## Vercel
+### Step 4 — Deploy
+Click **Deploy**. Vercel will install dependencies, run the build, and give you a live
+`https://your-project.vercel.app` URL. Every future push to `main` auto-deploys.
 
-1. Sign in to Vercel.
-2. Choose **Add New → Project**.
-3. Import the GitHub repository.
-4. Vercel should detect Vite automatically.
-5. Build command: `npm run build`
-6. Output directory: `dist`
-7. No environment variables are required.
-8. Deploy.
+### Step 5 — Verify PWA install
+Open the deployed URL on a phone (installability requires HTTPS, which Vercel provides
+automatically). You should see an **INSTALL GAME** button in the main menu on supported
+browsers (Chrome/Edge on Android, and via the browser's native "Add to Home Screen" flow
+on iOS Safari, which doesn't fire the same install prompt event). No custom domain is
+required — the free Vercel tier is sufficient.
 
-The included `vite.config.js` uses a relative base so the generated site works cleanly as a static Vercel deployment.
+---
 
-## PWA installation
+## 4. Project structure
 
-The browser controls installation availability. When supported, the game receives the browser's `beforeinstallprompt` event and shows **INSTALL GAME** in the main menu. The button calls the real browser install prompt; it does not fake installation.
+```
+neon-racer-3d/
+├── index.html              Single HTML shell with all screen containers
+├── package.json
+├── vite.config.js
+├── public/
+│   ├── manifest.webmanifest PWA manifest (name, icons, display mode)
+│   ├── service-worker.js    Offline caching (app shell + runtime cache)
+│   └── icons/               192x192 / 512x512 app icons
+└── src/
+    ├── main.js              Boots the Game, registers the service worker
+    ├── style.css            All UI styling (neon/glassmorphism theme)
+    ├── game/
+    │   ├── Game.js           Screen flow, render loop, settings, PWA install
+    │   ├── GameState.js      Wraps saved progress + session selections
+    │   ├── RaceManager.js    Countdown, laps, positions, race timer, results
+    │   ├── Physics.js        Shared arcade car physics stepper
+    │   ├── Collision.js      Car-car and car-barrier collision resolution
+    │   └── Camera.js         Third-person chase camera (tilt/shake/FOV)
+    ├── cars/
+    │   ├── CarData.js        Car stat/tuning definitions (3 original cars)
+    │   ├── CarModel.js       Procedural low-poly car mesh builder
+    │   ├── PlayerCar.js      Player car wrapper (input-driven)
+    │   └── AICar.js          AI car wrapper (spline-following + overtaking)
+    ├── tracks/
+    │   ├── index.js          Track registry (Neon City implemented; two more stubbed)
+    │   ├── TrackManager.js   Generic control-point -> road/barrier mesh builder
+    │   └── NeonCity.js       Neon City track layout + decorations
+    ├── ui/
+    │   ├── MainMenu.js, HUD.js, Garage.js, Results.js, Settings.js
+    ├── controls/
+    │   ├── TouchControls.js  Steer/brake/nitro buttons + optional tilt steering
+    │   └── KeyboardControls.js
+    ├── audio/
+    │   └── AudioManager.js   Procedurally synthesized SFX/engine sound (see below)
+    └── utils/
+        ├── Storage.js        localStorage save/load
+        └── DeviceDetection.js WebGL/touch/mobile/vibration detection
+```
 
-On iOS/iPadOS, installation behavior is controlled by Safari and may use the browser's Share → Add to Home Screen flow rather than `beforeinstallprompt`.
+Adding a new track later is just: write a new file like `NeonCity.js` with a different
+list of control points and decorations, then register it in `tracks/index.js` and flip
+`implemented: true` in the track list. The road/barrier/collision code is fully generic.
 
-## Offline behavior
+---
 
-The service worker precaches the shell and caches same-origin game files as they are requested. After the initial successful visit, the core game can continue to load offline when the browser retains the cache.
+## 5. Audio note
 
-## Controls
+There are no bundled audio files. `AudioManager.js` synthesizes all sound effects and the
+engine note live with the WebAudio API, so the game never ships with unlicensed or
+placeholder-silent audio — what you hear is real, original, generated sound. If you'd
+like richer music/SFX:
+1. Add your own licensed files under `public/assets/audio/`.
+2. Swap the relevant method bodies in `src/audio/AudioManager.js` to play those files
+   instead of the oscillator-based sounds (the public methods like `playCollision()` can
+   keep the same names, so nothing else in the game needs to change).
 
-Keyboard:
-- W / Arrow Up — accelerate
-- S / Arrow Down — brake
-- A / Arrow Left — steer left
-- D / Arrow Right — steer right
-- Space — nitro
+---
 
-Mobile:
-- Left steering button
-- Right steering button
-- Brake button
-- N₂ nitro button
+## 6. Controls
 
-## Audio
+**Touch:** on-screen LEFT / RIGHT steer buttons, BRAKE, and NITRO. The car
+auto-accelerates unless you're braking, so both thumbs stay free for steering and nitro.
+A TILT mode is also available in Settings (steer by tilting your phone).
 
-The project includes an original Web Audio fallback system that synthesizes simple beeps for countdown, nitro, crash and finish. It does not download copyrighted music or sound effects.
+**Keyboard:** `W`/`↑` accelerate, `S`/`↓` brake, `A`/`←` and `D`/`→` steer, `SPACE` nitro.
 
-Music/SFX toggles are persisted. A future version can add properly licensed audio files without changing the core game architecture.
+---
 
-## Testing note
+## 7. Testing checklist
 
-The source is structured for Vite and the imports are internally consistent. Before public release, run `npm install` and `npm run build` on your machine and test on the actual Android/iOS devices you plan to support. Browser/PWA installation prompts vary by browser and OS, so those cannot be guaranteed programmatically on every device.
+Verified by code review and manual reasoning during development:
+- [x] Project structure has no dangling imports (every imported module file exists)
+- [x] `npm run build` targets are standard Vite/Three.js and should build cleanly
+- [x] WebGL support check shows a graceful fallback screen if unsupported
+- [x] Touch controls use `touchstart`/`touchend`/`pointerdown`/`pointerup` with
+      `preventDefault` to avoid scroll interference, and `touch-action: none` is set globally
+- [x] LocalStorage save/load has a try/catch fallback to defaults if corrupted
+- [x] Manifest JSON is valid and icons are referenced with matching paths/sizes
+- [x] Service worker uses a safe versioned-cache activate/cleanup pattern
 
-## License / assets
+**Not actually executed in a browser or on Vercel by the author of this code** (no
+sandboxed browser/network available in this environment) — please run `npm install &&
+npm run dev` locally as a first check, since that will surface any environment-specific
+issue (Node version, dependency resolution) immediately. If you hit a build error, check
+the terminal output and feel free to paste it back for a fix.
 
-The code and procedural game concept are original for this project. No third-party 3D models, game textures, logos, characters, tracks, or copyrighted audio are required.
+---
+
+## 8. Performance & graphics settings
+
+Settings → Graphics (LOW / MEDIUM / HIGH) controls: shadow map on/off and resolution,
+device pixel ratio cap, and decoration density (buildings/trees/streetlights) on the
+track. The game auto-picks a starting tier based on device cores/memory, biased toward
+LOW/MEDIUM on phones.

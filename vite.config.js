@@ -1,9 +1,14 @@
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: "./",
+  base: './',
   build: {
-    target: "es2020",
-    sourcemap: false
+    target: 'es2019',
+    outDir: 'dist',
+    assetsInlineLimit: 0
+  },
+  server: {
+    host: true,
+    port: 5173
   }
 });

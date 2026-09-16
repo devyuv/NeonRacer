@@ -1,30 +1,236 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-  <meta name="theme-color" content="#050711" />
-  <meta name="description" content="NEON RACER 3D — an original mobile-first arcade racing PWA." />
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="icon" href="./icons/icon-192.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta name="description" content="NEON RACER 3D - an original arcade-style 3D racing game. Drift, boost and race through a neon city circuit against AI rivals." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Neon Racer" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <title>NEON RACER 3D</title>
+  <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <div id="app">
-    <div id="loading-screen">
-      <div class="loading-logo">NEON RACER <span>3D</span></div>
-      <div class="loading-sub">INITIALIZING CIRCUIT</div>
-      <div class="loading-track"><div id="loading-bar"></div></div>
-      <div id="loading-text">Preparing track...</div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="screen">
+      <div class="loading-content">
+        <h1 class="logo-text">NEON<span class="accent">RACER</span>3D</h1>
+        <div class="loading-bar-track">
+          <div id="loading-bar-fill" class="loading-bar-fill"></div>
+        </div>
+        <p id="loading-status" class="loading-status">Loading...</p>
+      </div>
     </div>
-    <div id="menu-root"></div>
-    <div id="game-root" class="hidden">
-      <div id="webgl"></div>
-      <div id="hud"></div>
-      <div id="controls"></div>
-      <div id="portrait-hint">For the best racing experience, rotate your phone to landscape.</div>
+
+    <!-- WebGL Unsupported Notice -->
+    <div id="webgl-error" class="screen hidden">
+      <div class="panel">
+        <h2>Graphics Not Supported</h2>
+        <p>Your device/browser does not support the graphics required for this game.<br/>Please try a modern browser with WebGL enabled.</p>
+      </div>
     </div>
+
+    <!-- Main Menu -->
+    <div id="main-menu" class="screen hidden">
+      <div class="menu-bg-glow"></div>
+      <h1 class="logo-text big">NEON<span class="accent">RACER</span>3D</h1>
+      <nav class="menu-buttons">
+        <button class="menu-btn primary" id="btn-play">PLAY</button>
+        <button class="menu-btn" id="btn-garage">GARAGE</button>
+        <button class="menu-btn" id="btn-tracks">TRACKS</button>
+        <button class="menu-btn" id="btn-settings">SETTINGS</button>
+        <button class="menu-btn" id="btn-how-to-play">HOW TO PLAY</button>
+        <button class="menu-btn install hidden" id="btn-install">INSTALL GAME</button>
+      </nav>
+      <div class="menu-footer">
+        <span id="coin-display">🪙 <span id="coin-count">0</span></span>
+      </div>
+    </div>
+
+    <!-- Play Mode Select -->
+    <div id="mode-select" class="screen hidden">
+      <div class="panel">
+        <h2>SELECT MODE</h2>
+        <div class="mode-list">
+          <button class="mode-btn" data-mode="quick">
+            <strong>QUICK RACE</strong>
+            <span>Race a track against 5 AI rivals</span>
+          </button>
+          <button class="mode-btn" data-mode="time-trial">
+            <strong>TIME TRIAL</strong>
+            <span>Race alone, beat your best time</span>
+          </button>
+          <button class="mode-btn" data-mode="championship">
+            <strong>CHAMPIONSHIP</strong>
+            <span>Multiple races, earn points</span>
+          </button>
+          <button class="mode-btn" data-mode="free-drive">
+            <strong>FREE DRIVE</strong>
+            <span>Cruise the track, no opponents</span>
+          </button>
+        </div>
+        <button class="menu-btn back" id="mode-back">BACK</button>
+      </div>
+    </div>
+
+    <!-- Track Select -->
+    <div id="track-select" class="screen hidden">
+      <div class="panel">
+        <h2>SELECT TRACK</h2>
+        <div class="track-list" id="track-list"></div>
+        <button class="menu-btn back" id="track-back">BACK</button>
+      </div>
+    </div>
+
+    <!-- Garage -->
+    <div id="garage" class="screen hidden">
+      <div class="panel garage-panel">
+        <h2 id="garage-car-name">VELOCITY-X</h2>
+        <div id="garage-canvas-wrap" class="garage-canvas-wrap"></div>
+        <div class="stat-bars">
+          <div class="stat-row"><span>SPEED</span><div class="stat-bar"><div class="stat-fill" data-stat="speed"></div></div></div>
+          <div class="stat-row"><span>ACCELERATION</span><div class="stat-bar"><div class="stat-fill" data-stat="accel"></div></div></div>
+          <div class="stat-row"><span>HANDLING</span><div class="stat-bar"><div class="stat-fill" data-stat="handling"></div></div></div>
+          <div class="stat-row"><span>NITRO</span><div class="stat-bar"><div class="stat-fill" data-stat="nitro"></div></div></div>
+        </div>
+        <div class="garage-nav">
+          <button class="menu-btn small" id="garage-prev">◀</button>
+          <button class="menu-btn primary" id="garage-select">SELECT</button>
+          <button class="menu-btn small" id="garage-next">▶</button>
+        </div>
+        <button class="menu-btn back" id="garage-back">BACK</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings" class="screen hidden">
+      <div class="panel">
+        <h2>SETTINGS</h2>
+        <div class="settings-list">
+          <div class="settings-row">
+            <span>Graphics</span>
+            <div class="segmented" id="set-graphics">
+              <button data-val="low">LOW</button><button data-val="medium">MEDIUM</button><button data-val="high">HIGH</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span>Music</span>
+            <div class="segmented" id="set-music"><button data-val="on">ON</button><button data-val="off">OFF</button></div>
+          </div>
+          <div class="settings-row">
+            <span>Sound Effects</span>
+            <div class="segmented" id="set-sfx"><button data-val="on">ON</button><button data-val="off">OFF</button></div>
+          </div>
+          <div class="settings-row">
+            <span>Vibration</span>
+            <div class="segmented" id="set-vibration"><button data-val="on">ON</button><button data-val="off">OFF</button></div>
+          </div>
+          <div class="settings-row">
+            <span>Control Type</span>
+            <div class="segmented" id="set-controls"><button data-val="touch">TOUCH</button><button data-val="tilt">TILT</button><button data-val="keyboard">KEYBOARD</button></div>
+          </div>
+          <div class="settings-row">
+            <span>Reset Progress</span>
+            <button class="menu-btn danger small" id="btn-reset-progress">RESET</button>
+          </div>
+        </div>
+        <button class="menu-btn back" id="settings-back">BACK</button>
+      </div>
+    </div>
+
+    <!-- How To Play -->
+    <div id="how-to-play" class="screen hidden">
+      <div class="panel">
+        <h2>HOW TO PLAY</h2>
+        <div class="howto-list">
+          <p><strong>Steer:</strong> A / D or Left / Right arrows, or the on-screen L / R buttons.</p>
+          <p><strong>Accelerate:</strong> W or Up Arrow (auto-accelerate is also on by default on touch).</p>
+          <p><strong>Brake / Reverse:</strong> S or Down Arrow, or the BRAKE button.</p>
+          <p><strong>Nitro Boost:</strong> SPACE or the NITRO button. Drains the nitro meter, recharges as you drive.</p>
+          <p><strong>Drift:</strong> Hold brake while steering through a turn at speed.</p>
+          <p><strong>Goal:</strong> Complete the required laps as fast as possible, finishing ahead of the AI pack.</p>
+        </div>
+        <button class="menu-btn back" id="howto-back">BACK</button>
+      </div>
+    </div>
+
+    <!-- Race Countdown / HUD / Canvas -->
+    <div id="race-screen" class="screen hidden">
+      <div id="canvas-container"></div>
+
+      <div id="rotate-hint" class="rotate-hint hidden">Rotate your phone to landscape for the best racing experience.</div>
+
+      <div id="countdown" class="countdown hidden"><span id="countdown-num">3</span></div>
+
+      <div id="hud" class="hud hidden">
+        <div class="hud-top">
+          <div class="hud-chip">POSITION<br/><span id="hud-position">1 / 6</span></div>
+          <div class="hud-chip">LAP<br/><span id="hud-lap">1 / 3</span></div>
+          <div class="hud-chip">TIME<br/><span id="hud-time">00:00.00</span></div>
+          <button id="hud-pause" class="hud-pause-btn">⏸</button>
+        </div>
+
+        <div class="hud-bottom">
+          <div class="speedo">
+            <span id="hud-speed">0</span>
+            <small>KM/H</small>
+          </div>
+          <div class="nitro-meter">
+            <span>NITRO</span>
+            <div class="nitro-bar-track"><div id="nitro-bar-fill" class="nitro-bar-fill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Touch Controls -->
+      <div id="touch-controls" class="touch-controls hidden">
+        <div class="touch-left">
+          <button id="btn-steer-left" class="touch-btn steer" aria-label="Steer Left">◀</button>
+        </div>
+        <div class="touch-right">
+          <button id="btn-nitro" class="touch-btn nitro" aria-label="Nitro">⚡</button>
+          <button id="btn-brake" class="touch-btn brake" aria-label="Brake">◼</button>
+          <button id="btn-steer-right" class="touch-btn steer" aria-label="Steer Right">▶</button>
+        </div>
+      </div>
+
+      <!-- Pause Overlay -->
+      <div id="pause-overlay" class="screen overlay hidden">
+        <div class="panel">
+          <h2>PAUSED</h2>
+          <button class="menu-btn primary" id="btn-resume">RESUME</button>
+          <button class="menu-btn" id="btn-restart">RESTART</button>
+          <button class="menu-btn" id="btn-pause-settings">SETTINGS</button>
+          <button class="menu-btn back" id="btn-quit">QUIT TO MENU</button>
+        </div>
+      </div>
+
+      <!-- Results Overlay -->
+      <div id="results-overlay" class="screen overlay hidden">
+        <div class="panel results-panel">
+          <h2 id="results-title">RACE COMPLETE</h2>
+          <div id="results-place" class="results-place">1st PLACE</div>
+          <div class="results-stats">
+            <div><span>TIME</span><strong id="results-time">00:00.00</strong></div>
+            <div><span>BEST LAP</span><strong id="results-bestlap">00:00.00</strong></div>
+            <div><span>COINS</span><strong id="results-coins">+0</strong></div>
+          </div>
+          <button class="menu-btn primary" id="btn-next-race">NEXT RACE</button>
+          <button class="menu-btn" id="btn-results-garage">GARAGE</button>
+          <button class="menu-btn back" id="btn-results-menu">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
   </div>
-  <script type="module" src="./src/main.js"></script>
+
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>

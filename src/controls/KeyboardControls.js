@@ -1,13 +1,33 @@
 export class KeyboardControls {
-  constructor(){
-    this.state={accel:false,brake:false,steer:0,nitro:false}; this.keys=new Set();
-    addEventListener("keydown",e=>{this.keys.add(e.code); if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code))e.preventDefault();});
-    addEventListener("keyup",e=>this.keys.delete(e.code));
+  constructor() {
+    this.keys = {};
+    this._onDown = (e) => { this.keys[e.code] = true; };
+    this._onUp = (e) => { this.keys[e.code] = false; };
+    window.addEventListener('keydown', this._onDown);
+    window.addEventListener('keyup', this._onUp);
   }
-  update(){
-    this.state.accel=this.keys.has("KeyW")||this.keys.has("ArrowUp");
-    this.state.brake=this.keys.has("KeyS")||this.keys.has("ArrowDown");
-    this.state.steer=(this.keys.has("KeyA")||this.keys.has("ArrowLeft")?-1:0)+(this.keys.has("KeyD")||this.keys.has("ArrowRight")?1:0);
-    this.state.nitro=this.keys.has("Space"); return this.state;
+
+  getInput() {
+    const up = this.keys['KeyW'] || this.keys['ArrowUp'];
+    const down = this.keys['KeyS'] || this.keys['ArrowDown'];
+    const left = this.keys['KeyA'] || this.keys['ArrowLeft'];
+    const right = this.keys['KeyD'] || this.keys['ArrowRight'];
+    const nitro = this.keys['Space'];
+
+    let steer = 0;
+    if (left) steer -= 1;
+    if (right) steer += 1;
+
+    return {
+      throttle: up ? 1 : 0,
+      brake: !!down,
+      steer,
+      nitro: !!nitro
+    };
+  }
+
+  dispose() {
+    window.removeEventListener('keydown', this._onDown);
+    window.removeEventListener('keyup', this._onUp);
   }
 }

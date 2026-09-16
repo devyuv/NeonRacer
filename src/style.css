@@ -295,7 +295,10 @@ html, body {
   .panel { max-height: 92vh; padding: 16px; }
 }
 
-@media (min-width: 700px) {
+@media (min-width: 700px) and (hover: hover) and (pointer: fine) {
   .menu-buttons { max-width: 360px; }
   .touch-controls { display: none !important; }
+}
+@media (min-width: 700px) {
+  .menu-buttons { max-width: 360px; }
 }

@@ -1,10 +1,22 @@
-export function menuHTML(save, canInstall=false){
- return `<section class="screen menu-screen"><div class="brand">NEON RACER <span>3D</span></div>
- <div class="tagline">CHASE THE LIGHT. OWN THE CIRCUIT.</div>
- <div class="menu-grid">
-  <button class="primary" data-action="play">PLAY</button>
-  <button data-action="garage">GARAGE</button><button data-action="tracks">TRACKS</button>
-  <button data-action="settings">SETTINGS</button><button data-action="how">HOW TO PLAY</button>
-  ${canInstall?'<button data-action="install">INSTALL GAME</button>':""}
- </div><div class="save-chip">COINS ${save.coins} · TROPHIES ${save.trophies}</div></section>`;
+export class MainMenuView {
+  constructor(root, { onPlay, onGarage, onTracks, onSettings, onHowToPlay, onInstall }) {
+    this.root = root.querySelector('#main-menu');
+    this.coinCountEl = root.querySelector('#coin-count');
+    this.installBtn = root.querySelector('#btn-install');
+
+    root.querySelector('#btn-play').addEventListener('click', onPlay);
+    root.querySelector('#btn-garage').addEventListener('click', onGarage);
+    root.querySelector('#btn-tracks').addEventListener('click', onTracks);
+    root.querySelector('#btn-settings').addEventListener('click', onSettings);
+    root.querySelector('#btn-how-to-play').addEventListener('click', onHowToPlay);
+    this.installBtn.addEventListener('click', onInstall);
+  }
+
+  updateCoins(coins) {
+    this.coinCountEl.textContent = coins;
+  }
+
+  showInstallButton(show) {
+    this.installBtn.classList.toggle('hidden', !show);
+  }
 }

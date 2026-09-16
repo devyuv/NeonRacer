@@ -1,9 +1,45 @@
-export function hudHTML(){
- return `<div id="countdown-overlay"></div><div class="hud-top"><div><small>POSITION</small><b id="pos">1 / 6</b></div><div><small>LAP</small><b id="lap">1 / 3</b></div><button id="pause">Ⅱ</button></div>
- <div class="hud-bottom"><div class="speed"><span id="speed">0</span><small>KM/H</small></div><div class="timer"><small>TIME</small><b id="time">00:00.00</b></div><div class="nitro-box"><small>NITRO</small><div class="bar"><i id="nitro"></i></div></div></div>`;
+export class HUD {
+  constructor(root) {
+    this.positionEl = root.querySelector('#hud-position');
+    this.lapEl = root.querySelector('#hud-lap');
+    this.timeEl = root.querySelector('#hud-time');
+    this.speedEl = root.querySelector('#hud-speed');
+    this.nitroFillEl = root.querySelector('#nitro-bar-fill');
+    this.hudRoot = root.querySelector('#hud');
+    this.countdownRoot = root.querySelector('#countdown');
+    this.countdownNum = root.querySelector('#countdown-num');
+  }
+
+  show() { this.hudRoot.classList.remove('hidden'); }
+  hide() { this.hudRoot.classList.add('hidden'); }
+
+  update({ position, totalCars, lap, laps, timeSeconds, speedKmh, nitro, showLapCounter }) {
+    this.positionEl.textContent = `${position} / ${totalCars}`;
+    this.lapEl.textContent = showLapCounter === false ? '-' : `${Math.min(lap, laps)} / ${laps}`;
+    this.timeEl.textContent = formatTime(timeSeconds);
+    this.speedEl.textContent = speedKmh;
+    this.nitroFillEl.style.width = Math.round(nitro * 100) + '%';
+  }
+
+  showCountdown(num) {
+    this.countdownRoot.classList.remove('hidden');
+    this.countdownNum.textContent = num > 0 ? String(num) : 'GO!';
+    // restart CSS animation
+    this.countdownNum.style.animation = 'none';
+    void this.countdownNum.offsetWidth;
+    this.countdownNum.style.animation = '';
+  }
+
+  hideCountdown() {
+    this.countdownRoot.classList.add('hidden');
+  }
 }
-export function updateHUD(player,state,pos){
- const s=document.getElementById("speed"),t=document.getElementById("time"),l=document.getElementById("lap"),p=document.getElementById("pos"),n=document.getElementById("nitro");
- if(s)s.textContent=Math.round(player.speed); if(t)t.textContent=fmt(state.time); if(l)l.textContent=`${Math.min(state.lap,state.totalLaps)} / ${state.totalLaps}`; if(p)p.textContent=`${pos} / 6`; if(n)n.style.width=`${player.nitro}%`;
+
+export function formatTime(totalSeconds) {
+  if (!isFinite(totalSeconds) || totalSeconds < 0) totalSeconds = 0;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  const millis = Math.floor((totalSeconds % 1) * 100);
+  const pad = (n, len = 2) => String(n).padStart(len, '0');
+  return `${pad(minutes)}:${pad(seconds)}.${pad(millis)}`;
 }
-export function fmt(s){const m=Math.floor(s/60),sec=(s%60).toFixed(2).padStart(5,"0");return `${String(m).padStart(2,"0")}:${sec}`;}

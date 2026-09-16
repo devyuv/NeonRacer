@@ -1,6 +1,38 @@
-export function resultsHTML(result){
- return `<section class="screen results"><div class="result-kicker">${result.position===1?"RACE COMPLETE":"RACE FINISHED"}</div><h1>${ordinal(result.position)} PLACE</h1>
- <div class="result-stats"><div>TIME <b>${result.time}</b></div><div>BEST LAP <b>${result.bestLap}</b></div><div>COINS <b>+${result.coins}</b></div></div>
- <div class="menu-grid"><button class="primary" data-action="next">NEXT RACE</button><button data-action="retry">RETRY</button><button data-action="garage">GARAGE</button><button data-action="menu">MAIN MENU</button></div></section>`;
+import { formatTime } from './HUD.js';
+
+const PLACE_SUFFIX = ['th', 'st', 'nd', 'rd'];
+function ordinal(n) {
+  const v = n % 100;
+  return n + (PLACE_SUFFIX[(v - 20) % 10] || PLACE_SUFFIX[v] || PLACE_SUFFIX[0]);
 }
-function ordinal(n){return n===1?"1st":n===2?"2nd":n===3?"3rd":`${n}th`;}
+
+export class ResultsView {
+  constructor(root, { onNextRace, onGarage, onMainMenu }) {
+    this.root = root.querySelector('#results-overlay');
+    this.titleEl = root.querySelector('#results-title');
+    this.placeEl = root.querySelector('#results-place');
+    this.timeEl = root.querySelector('#results-time');
+    this.bestLapEl = root.querySelector('#results-bestlap');
+    this.coinsEl = root.querySelector('#results-coins');
+    this.nextBtn = root.querySelector('#btn-next-race');
+
+    root.querySelector('#btn-next-race').addEventListener('click', onNextRace);
+    root.querySelector('#btn-results-garage').addEventListener('click', onGarage);
+    root.querySelector('#btn-results-menu').addEventListener('click', onMainMenu);
+  }
+
+  show(results, { isChampionshipFinal = false } = {}) {
+    const won = results.place === 1;
+    this.titleEl.textContent = won ? 'RACE COMPLETE' : 'RACE FINISHED';
+    this.placeEl.textContent = `${ordinal(results.place)} PLACE`;
+    this.timeEl.textContent = formatTime(results.time);
+    this.bestLapEl.textContent = isFinite(results.bestLap) ? formatTime(results.bestLap) : '--:--.--';
+    this.coinsEl.textContent = '+' + results.coins;
+    this.nextBtn.textContent = isChampionshipFinal ? 'FINISH' : 'NEXT RACE';
+    this.root.classList.remove('hidden');
+  }
+
+  hide() {
+    this.root.classList.add('hidden');
+  }
+}

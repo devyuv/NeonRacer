@@ -1,72 +1,219 @@
-import * as THREE from "three";
+import * as THREE from 'three';
+import { TrackBuilder } from './TrackManager.js';
 
-export class NeonCity {
-  constructor(scene){
-    this.scene=scene; this.roadHalfWidth=7; this.length=1500; this.segment=10;
-    this.group=new THREE.Group(); scene.add(this.group); this.build();
+// Original circuit layout - a flowing figure-eight-ish loop, all values are just
+// coordinates and carry no reference to any real or copyrighted location.
+const CONTROL_POINTS = [
+  { x: 0, z: 0 },
+  { x: 40, z: 10 },
+  { x: 70, z: 40 },
+  { x: 70, z: 90 },
+  { x: 40, z: 120 },
+  { x: -10, z: 120 },
+  { x: -40, z: 95 },
+  { x: -40, z: 55 },
+  { x: -15, z: 35 },
+  { x: -15, z: 10 },
+];
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function buildNeonCity(graphicsTier = 'medium') {
+  const track = new TrackBuilder(CONTROL_POINTS, {
+    roadColor: 0x14141f,
+    lineColor: 0x00e6ff,
+    barrierColor: 0xff00c8,
+    width: 12
+  });
+
+  const scene = new THREE.Group();
+  scene.add(track.group);
+
+  const rand = mulberry32(1337);
+  const density = graphicsTier === 'low' ? 0.35 : graphicsTier === 'medium' ? 0.7 : 1.0;
+
+  // Ground plane (city floor)
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(600, 600),
+    new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 1 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.05;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Grass/terrain ring outside the road (simple color variation patches)
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0x0e1b14, roughness: 1 });
+  for (let i = 0; i < track.centerline.length; i += 6) {
+    if (rand() > density) continue;
+    const p = track.centerline[i];
+    const patch = new THREE.Mesh(new THREE.CircleGeometry(6 + rand() * 6, 6), grassMat);
+    patch.rotation.x = -Math.PI / 2;
+    const offset = 18 + rand() * 20;
+    const angle = rand() * Math.PI * 2;
+    patch.position.set(p.x + Math.cos(angle) * offset, -0.03, p.z + Math.sin(angle) * offset);
+    scene.add(patch);
   }
-  sample(d){
-    const L=this.length, t=((d%L)+L)%L;
-    const a=t/L*Math.PI*2;
-    return new THREE.Vector3(Math.sin(a)*58 + Math.sin(a*3)*9,0,Math.cos(a)*58 + Math.cos(a*2)*5);
-  }
-  tangent(d){
-    const p=this.sample(d), q=this.sample(d+.5); return q.sub(p).normalize();
-  }
-  build(){
-    const roadMat=new THREE.MeshStandardMaterial({color:0x171b28,roughness:.9});
-    const edgeMat=new THREE.MeshBasicMaterial({color:0x00eaff});
-    for(let d=0;d<this.length;d+=this.segment){
-      const p=this.sample(d), tan=this.tangent(d), yaw=Math.atan2(tan.x,tan.z);
-      const road=new THREE.Mesh(new THREE.BoxGeometry(this.roadHalfWidth*2,.16,this.segment+.3),roadMat);
-      road.position.copy(p); road.position.y=-.05; road.rotation.y=yaw; this.group.add(road);
-      if(d%20===0){
-        const mark=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,3.3),new THREE.MeshBasicMaterial({color:0xd9ffff}));
-        mark.position.copy(p); mark.position.y=.06; mark.rotation.y=yaw; this.group.add(mark);
-      }
-      if(d%30===0) this.addBarrier(p,tan);
-      if(d%50===0) this.addLamp(p,tan);
-      if(d%40===0) this.addBuilding(p);
-      if(d%70===0) this.addTree(p,tan);
+
+  // Buildings (instanced boxes with neon window strips) placed off-track along the route
+  const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
+  const buildingMat = new THREE.MeshStandardMaterial({ color: 0x11121c, roughness: 0.6, metalness: 0.3 });
+  const buildingCount = Math.floor(70 * density);
+  const buildingMesh = new THREE.InstancedMesh(buildingGeo, buildingMat, buildingCount);
+  buildingMesh.castShadow = true;
+  buildingMesh.receiveShadow = true;
+  const dummy = new THREE.Object3D();
+  const neonWindowMat = new THREE.MeshBasicMaterial({ color: 0x00e6ff });
+  const neonGroup = new THREE.Group();
+
+  for (let i = 0; i < buildingCount; i++) {
+    const idx = Math.floor(rand() * track.centerline.length);
+    const p = track.centerline[idx];
+    const nextP = track.centerline[(idx + 1) % track.centerline.length];
+    const dir = new THREE.Vector2(nextP.x - p.x, nextP.z - p.z).normalize();
+    const normal = new THREE.Vector2(-dir.y, dir.x);
+    const side = rand() > 0.5 ? 1 : -1;
+    const distance = 16 + rand() * 26;
+    const w = 5 + rand() * 8;
+    const h = 8 + rand() * 34;
+    const d = 5 + rand() * 8;
+    const x = p.x + normal.x * side * distance;
+    const z = p.z + normal.y * side * distance;
+
+    dummy.position.set(x, h / 2, z);
+    dummy.scale.set(w, h, d);
+    dummy.rotation.y = rand() * Math.PI;
+    dummy.updateMatrix();
+    buildingMesh.setMatrixAt(i, dummy.matrix);
+
+    if (rand() > 0.5) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.4, h * 0.8), neonWindowMat);
+      strip.position.set(x + Math.sin(dummy.rotation.y) * (w / 2 + 0.05), h / 2, z + Math.cos(dummy.rotation.y) * (w / 2 + 0.05));
+      strip.rotation.y = dummy.rotation.y;
+      strip.material = new THREE.MeshBasicMaterial({ color: rand() > 0.5 ? 0x00e6ff : 0xff00c8 });
+      neonGroup.add(strip);
     }
-    const terrain=new THREE.Mesh(new THREE.CircleGeometry(110,48),new THREE.MeshStandardMaterial({color:0x061c16,roughness:1}));
-    terrain.rotation.x=-Math.PI/2; terrain.position.y=-.25; this.group.add(terrain);
-    const inner=new THREE.Mesh(new THREE.RingGeometry(40,50,64),new THREE.MeshBasicMaterial({color:0x09111f,side:THREE.DoubleSide}));
-    inner.rotation.x=-Math.PI/2; inner.position.y=-.21; this.group.add(inner);
-    for(let i=0;i<20;i++){
-      const h=8+((i*37)%16), b=new THREE.Mesh(new THREE.BoxGeometry(4,h,4),new THREE.MeshStandardMaterial({color:0x11172a,roughness:.7}));
-      const a=i/20*Math.PI*2; b.position.set(Math.sin(a)*78,h/2,Math.cos(a)*78); this.group.add(b);
+  }
+  scene.add(buildingMesh);
+  scene.add(neonGroup);
+
+  // Street lights along the track
+  const poleGeo = new THREE.CylinderGeometry(0.12, 0.12, 5, 6);
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+  const lampGeo = new THREE.SphereGeometry(0.28, 8, 8);
+  const lampMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2c0, emissiveIntensity: 1.2 });
+  const lightCount = Math.floor((graphicsTier === 'high' ? 40 : graphicsTier === 'medium' ? 22 : 10));
+  for (let i = 0; i < track.centerline.length; i += Math.floor(track.centerline.length / lightCount) || 1) {
+    const p = track.centerline[i];
+    const nextP = track.centerline[(i + 1) % track.centerline.length];
+    const dir = new THREE.Vector2(nextP.x - p.x, nextP.z - p.z).normalize();
+    const normal = new THREE.Vector2(-dir.y, dir.x);
+    const side = (i % 2 === 0) ? 1 : -1;
+    const dist = 7.5;
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.set(p.x + normal.x * side * dist, 2.5, p.z + normal.y * side * dist);
+    pole.castShadow = true;
+    scene.add(pole);
+    const lamp = new THREE.Mesh(lampGeo, lampMat);
+    lamp.position.set(pole.position.x, 5.1, pole.position.z);
+    scene.add(lamp);
+    if (graphicsTier !== 'low') {
+      const pl = new THREE.PointLight(0xfff2c0, 0.6, 14, 2);
+      pl.position.copy(lamp.position);
+      scene.add(pl);
     }
   }
-  addBarrier(p,tan){
-    const n=new THREE.Vector3(-tan.z,0,tan.x);
-    for(const side of [-1,1]){
-      const b=new THREE.Mesh(new THREE.BoxGeometry(.45,.7,9.2),new THREE.MeshStandardMaterial({color:0x2a3041,metalness:.5}));
-      b.position.copy(p).addScaledVector(n,side*7.5); b.position.y=.35; b.rotation.y=Math.atan2(tan.x,tan.z); this.group.add(b);
-      const glow=new THREE.Mesh(new THREE.BoxGeometry(.48,.08,8.8),new THREE.MeshBasicMaterial({color:side>0?0xff2fe6:0x2ff5ff}));
-      glow.position.copy(b.position); glow.position.y=.72; glow.rotation.y=b.rotation.y; this.group.add(glow);
-    }
+
+  // Trees (simple cone + cylinder, scattered off the road)
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.22, 1.4, 6);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x2b1c12 });
+  const leafGeo = new THREE.ConeGeometry(1.1, 2.4, 7);
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x0f3b2a, roughness: 0.9 });
+  const treeCount = Math.floor(50 * density);
+  for (let i = 0; i < treeCount; i++) {
+    const idx = Math.floor(rand() * track.centerline.length);
+    const p = track.centerline[idx];
+    const nextP = track.centerline[(idx + 1) % track.centerline.length];
+    const dir = new THREE.Vector2(nextP.x - p.x, nextP.z - p.z).normalize();
+    const normal = new THREE.Vector2(-dir.y, dir.x);
+    const side = rand() > 0.5 ? 1 : -1;
+    const dist = 10 + rand() * 30;
+    const x = p.x + normal.x * side * dist;
+    const z = p.z + normal.y * side * dist;
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.set(x, 0.7, z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+    const leaf = new THREE.Mesh(leafGeo, leafMat);
+    leaf.position.set(x, 2.3, z);
+    leaf.castShadow = true;
+    scene.add(leaf);
   }
-  addLamp(p,tan){
-    const n=new THREE.Vector3(-tan.z,0,tan.x);
-    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,5.5,8),new THREE.MeshStandardMaterial({color:0x303848,metalness:.8}));
-    pole.position.copy(p).addScaledVector(n,10); pole.position.y=2.75; pole.rotation.y=Math.atan2(tan.x,tan.z); this.group.add(pole);
-    const lamp=new THREE.PointLight(0x4defff,1.4,15); lamp.position.copy(pole.position); lamp.position.y=5.5; this.group.add(lamp);
+
+  // Road signs
+  const signGeo = new THREE.BoxGeometry(1.4, 1.0, 0.06);
+  const signMat = new THREE.MeshStandardMaterial({ color: 0x111318, emissive: 0xff00c8, emissiveIntensity: 0.4 });
+  for (let i = 0; i < track.centerline.length; i += 14) {
+    const p = track.centerline[i];
+    const nextP = track.centerline[(i + 1) % track.centerline.length];
+    const dir = new THREE.Vector2(nextP.x - p.x, nextP.z - p.z).normalize();
+    const normal = new THREE.Vector2(-dir.y, dir.x);
+    const side = -1;
+    const dist = 7.2;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.2, 6), poleMat);
+    post.position.set(p.x + normal.x * side * dist, 1.1, p.z + normal.y * side * dist);
+    scene.add(post);
+    const sign = new THREE.Mesh(signGeo, signMat);
+    sign.position.set(post.position.x, 2.0, post.position.z);
+    sign.rotation.y = Math.atan2(dir.x, dir.y);
+    scene.add(sign);
   }
-  addBuilding(p){
-    const b=new THREE.Mesh(new THREE.BoxGeometry(6,10,6),new THREE.MeshStandardMaterial({color:0x0d1221,roughness:.8}));
-    b.position.set(p.x*1.22,5,p.z*1.22); this.group.add(b);
-    for(let y=2;y<9;y+=2) {
-      const w=new THREE.Mesh(new THREE.BoxGeometry(4.6,.35,.08),new THREE.MeshBasicMaterial({color:(y%4?0x00eaff:0xff2fe6)}));
-      w.position.set(b.position.x,b.position.y-5+y,b.position.z+3.04); this.group.add(w);
-    }
+
+  // Distant mountains/hills backdrop
+  const mountainMat = new THREE.MeshStandardMaterial({ color: 0x171a2c, roughness: 1 });
+  for (let i = 0; i < 14; i++) {
+    const angle = (i / 14) * Math.PI * 2;
+    const radius = 260 + rand() * 40;
+    const mountain = new THREE.Mesh(new THREE.ConeGeometry(60 + rand() * 40, 90 + rand() * 60, 5), mountainMat);
+    mountain.position.set(Math.cos(angle) * radius + 15, -10, Math.sin(angle) * radius + 55);
+    mountain.rotation.y = rand() * Math.PI;
+    scene.add(mountain);
   }
-  addTree(p,tan){
-    const n=new THREE.Vector3(-tan.z,0,tan.x);
-    const x=p.clone().addScaledVector(n,14+Math.random()*5);
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.18,.25,2,7),new THREE.MeshStandardMaterial({color:0x49321f}));
-    trunk.position.set(x.x,1,x.z); this.group.add(trunk);
-    const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(1.7,1),new THREE.MeshStandardMaterial({color:0x123d31,roughness:1}));
-    crown.position.set(x.x,2.7,x.z); this.group.add(crown);
+
+  // Sky + clouds via a large inverted sphere with gradient-ish color and simple cloud sprites
+  const skyGeo = new THREE.SphereGeometry(500, 16, 12);
+  const skyMat = new THREE.MeshBasicMaterial({ color: 0x0a0a1e, side: THREE.BackSide });
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(sky);
+
+  const cloudMat = new THREE.MeshBasicMaterial({ color: 0x1c1f38, transparent: true, opacity: 0.5 });
+  for (let i = 0; i < 18; i++) {
+    const cloud = new THREE.Mesh(new THREE.SphereGeometry(14 + rand() * 18, 6, 5), cloudMat);
+    const angle = rand() * Math.PI * 2;
+    const radius = 150 + rand() * 120;
+    cloud.position.set(Math.cos(angle) * radius, 70 + rand() * 60, Math.sin(angle) * radius);
+    cloud.scale.y = 0.4;
+    scene.add(cloud);
   }
+
+  // Fog for depth + performance (hides pop-in of distant objects)
+  const fog = new THREE.FogExp2(0x0a0a14, graphicsTier === 'low' ? 0.006 : 0.0035);
+
+  return {
+    id: 'neon-city',
+    name: 'Neon City',
+    scene,
+    track,
+    fog,
+    laps: 3,
+    ambientColor: 0x1c2440,
+    sunColor: 0x9fd4ff
+  };
 }

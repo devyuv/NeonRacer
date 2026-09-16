@@ -159,10 +159,14 @@ export class Game {
         if (key === 'graphics') this._applyRendererQuality();
         if (key === 'music') this.audio.setMusic(val === 'on');
         if (key === 'sfx') this.audio.setSfx(val === 'on');
-        if (key === 'controlType') this.touch.setControlType(val);
+        if (key === 'controlType') this._applyControlType(val, { fromSettings: true });
       },
       onReset: () => { this.mainMenu.updateCoins(this.state.save.coins); }
     });
+
+    this.tiltToggleBtn = document.getElementById('hud-tilt-toggle');
+    this.tiltToggleBtn.addEventListener('click', () => this._toggleTiltMode());
+    this._applyControlType(this.state.settings.controlType, { silent: true });
     document.getElementById('settings-back').addEventListener('click', () => this._showScreen(this._settingsReturnScreen || 'main-menu'));
     document.getElementById('howto-back').addEventListener('click', () => this._showScreen('main-menu'));
 
@@ -183,6 +187,31 @@ export class Game {
       this._showScreen('settings');
     });
     document.getElementById('btn-quit').addEventListener('click', () => { this._teardownRace(); this._showScreen('main-menu'); });
+  }
+
+  // ---------- Control type (touch buttons vs. tilt steering) ----------
+
+  /**
+   * Switches steering between the on-screen L/R buttons and phone-tilt steering.
+   * Used by both the Settings screen and the quick in-race tilt button, so the
+   * two stay in sync no matter which one the player used.
+   */
+  _applyControlType(type, { fromSettings = false, silent = false } = {}) {
+    this.touch.setControlType(type);
+    if (!fromSettings) this.state.setSetting('controlType', type);
+    if (this.settingsView) this.settingsView.refresh();
+
+    const isTilt = type === 'tilt';
+    this.tiltToggleBtn.classList.toggle('active', isTilt);
+    document.getElementById('touch-controls').classList.toggle('tilt-mode', isTilt);
+
+    if (!silent) this.audio.playMenuClick();
+  }
+
+  _toggleTiltMode() {
+    this.audio.unlock(); // tilt permission prompts (iOS) need a user gesture, same as audio
+    const next = this.state.settings.controlType === 'tilt' ? 'touch' : 'tilt';
+    this._applyControlType(next);
   }
 
   _applyAudioSettings() {

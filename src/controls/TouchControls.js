@@ -20,9 +20,11 @@ export class TouchControls {
 
     this._onOrientation = (e) => {
       if (e.gamma === null) return;
-      // gamma: left-right tilt in degrees (-90..90). Clamp + normalize to -1..1
+      // gamma: left-right tilt in degrees (-90..90). Clamp + normalize to -1..1,
+      // then negate so tilting the phone right actually steers right on screen
+      // (matches the sign convention used by the L/R buttons below).
       const clamped = Math.max(-30, Math.min(30, e.gamma));
-      this.tilt = clamped / 30;
+      this.tilt = -(clamped / 30);
     };
   }
 
@@ -67,8 +69,10 @@ export class TouchControls {
     if (this.controlType === 'tilt') {
       steer = this.tilt;
     } else {
-      if (this.state.left) steer -= 1;
-      if (this.state.right) steer += 1;
+      // Positive steer turns the car right on screen - see KeyboardControls.js for the
+      // same convention.
+      if (this.state.left) steer += 1;
+      if (this.state.right) steer -= 1;
     }
     return {
       throttle: this.state.brake ? 0 : 1,

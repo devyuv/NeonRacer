@@ -1,37 +1,52 @@
-import * as THREE from 'three';
+// Generic 2D track builder: turns a list of {x,y} control points into a smooth
+// closed loop (centerline), a filled road polygon, and barrier positions - plus
+// fast helpers for off-road detection and lap progress. No external libraries.
 
-const ROAD_WIDTH = 11;
-const ROAD_SEGMENTS_PER_UNIT = 0.35; // sample density along the curve
+const ROAD_WIDTH = 90;
+const SAMPLES_PER_SEGMENT = 14;
 
-/**
- * Builds a closed race track from a list of {x,z} control points.
- * Returns the road mesh, a reusable curve, sampled centerline points,
- * a fast off-road distance sampler, and barrier meshes.
- */
+function catmullRomPoint(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+  const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+  return { x, y };
+}
+
+function buildClosedSpline(points, samplesPerSegment) {
+  const n = points.length;
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = points[(i - 1 + n) % n];
+    const p1 = points[i];
+    const p2 = points[(i + 1) % n];
+    const p3 = points[(i + 2) % n];
+    for (let s = 0; s < samplesPerSegment; s++) {
+      result.push(catmullRomPoint(p0, p1, p2, p3, s / samplesPerSegment));
+    }
+  }
+  return result;
+}
+
 export class TrackBuilder {
   constructor(controlPoints, options = {}) {
     this.options = {
-      roadColor: options.roadColor ?? 0x1a1c28,
-      lineColor: options.lineColor ?? 0x00e6ff,
-      barrierColor: options.barrierColor ?? 0xff00c8,
+      roadColor: options.roadColor ?? '#14141f',
+      lineColor: options.lineColor ?? '#00e6ff',
+      barrierColor: options.barrierColor ?? '#ff00c8',
       width: options.width ?? ROAD_WIDTH,
       ...options
     };
+    this.width = this.options.width;
 
-    const vec3Points = controlPoints.map(p => new THREE.Vector3(p.x, 0, p.z));
-    this.curve = new THREE.CatmullRomCurve3(vec3Points, true, 'catmullrom', 0.5);
+    this.centerline = buildClosedSpline(controlPoints, SAMPLES_PER_SEGMENT);
+    this.length = this._estimateLength(this.centerline);
 
-    const approxLength = this._estimateLength(vec3Points);
-    this.sampleCount = Math.max(120, Math.floor(approxLength * ROAD_SEGMENTS_PER_UNIT));
-    this.centerline = this.curve.getSpacedPoints(this.sampleCount);
-    this.length = approxLength;
-
-    this.group = new THREE.Group();
-    this.group.name = 'track';
-
-    this._buildRoad();
-    this._buildBarriers();
-    this._buildStartLine();
+    this._buildRoadPolygon();
+    this._buildBarrierPoints();
+    this.startPoint = { x: this.centerline[0].x, y: this.centerline[0].y };
+    const p0 = this.centerline[0], p1 = this.centerline[1];
+    this.startHeading = Math.atan2(p1.x - p0.x, -(p1.y - p0.y));
   }
 
   _estimateLength(points) {
@@ -39,141 +54,104 @@ export class TrackBuilder {
     for (let i = 0; i < points.length; i++) {
       const a = points[i];
       const b = points[(i + 1) % points.length];
-      len += a.distanceTo(b);
+      len += Math.hypot(b.x - a.x, b.y - a.y);
     }
     return len;
   }
 
-  _getFrame(i) {
+  frameAt(i) {
+    const n = this.centerline.length;
     const p = this.centerline[i];
-    const pNext = this.centerline[(i + 1) % this.centerline.length];
-    const dir = new THREE.Vector3().subVectors(pNext, p).normalize();
-    const normal = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular on XZ plane
-    return { p, dir, normal };
+    const pNext = this.centerline[(i + 1) % n];
+    const dx = pNext.x - p.x, dy = pNext.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const dirX = dx / len, dirY = dy / len;
+    // perpendicular (rotate direction 90deg)
+    const normX = -dirY, normY = dirX;
+    return { p, dirX, dirY, normX, normY };
   }
 
-  _buildRoad() {
-    const halfW = this.options.width / 2;
-    const n = this.centerline.length;
-    const positions = [];
-    const uvs = [];
-    const indices = [];
-
-    for (let i = 0; i < n; i++) {
-      const { p, normal } = this._getFrame(i);
-      const left = new THREE.Vector3().copy(p).addScaledVector(normal, -halfW);
-      const right = new THREE.Vector3().copy(p).addScaledVector(normal, halfW);
-      positions.push(left.x, 0, left.z, right.x, 0, right.z);
-      uvs.push(0, i / n * 20, 1, i / n * 20);
+  _buildRoadPolygon() {
+    const halfW = this.width / 2;
+    this.leftEdge = [];
+    this.rightEdge = [];
+    for (let i = 0; i < this.centerline.length; i++) {
+      const { p, normX, normY } = this.frameAt(i);
+      this.leftEdge.push({ x: p.x + normX * halfW, y: p.y + normY * halfW });
+      this.rightEdge.push({ x: p.x - normX * halfW, y: p.y - normY * halfW });
     }
-
-    for (let i = 0; i < n; i++) {
-      const a = i * 2, b = i * 2 + 1;
-      const c = ((i + 1) % n) * 2, d = ((i + 1) % n) * 2 + 1;
-      indices.push(a, c, b, b, c, d);
-    }
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-
-    const mat = new THREE.MeshStandardMaterial({
-      color: this.options.roadColor,
-      roughness: 0.75,
-      metalness: 0.15
-    });
-    const roadMesh = new THREE.Mesh(geo, mat);
-    roadMesh.receiveShadow = true;
-    this.group.add(roadMesh);
-    this.roadMesh = roadMesh;
-
-    // Center dashed lane line using small emissive segments
-    const lineMat = new THREE.MeshBasicMaterial({ color: this.options.lineColor });
-    const dashGroup = new THREE.Group();
-    for (let i = 0; i < n; i += 4) {
-      const { p, dir } = this._getFrame(i);
-      const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 2.2), lineMat);
-      dash.rotation.x = -Math.PI / 2;
-      dash.position.set(p.x, 0.03, p.z);
-      dash.rotation.z = -Math.atan2(dir.x, dir.z);
-      dashGroup.add(dash);
-    }
-    this.group.add(dashGroup);
-
-    // Edge stripes (glow lines at road edges)
-    [-1, 1].forEach(side => {
-      const edgePositions = [];
-      for (let i = 0; i < n; i++) {
-        const { p, normal } = this._getFrame(i);
-        const edge = new THREE.Vector3().copy(p).addScaledVector(normal, side * (halfW - 0.4));
-        edgePositions.push(edge.x, 0.04, edge.z);
-      }
-      const edgeGeo = new THREE.BufferGeometry();
-      edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
-      const edgeMat = new THREE.LineBasicMaterial({ color: this.options.lineColor, transparent: true, opacity: 0.8 });
-      const loop = new THREE.LineLoop(edgeGeo, edgeMat);
-      this.group.add(loop);
-    });
   }
 
-  _buildBarriers() {
-    const halfW = this.options.width / 2 + 1.1;
-    const n = this.centerline.length;
-    const barrierGeo = new THREE.BoxGeometry(0.5, 1.0, 2.4);
-    const barrierMat = new THREE.MeshStandardMaterial({
-      color: this.options.barrierColor,
-      emissive: this.options.barrierColor,
-      emissiveIntensity: 0.35,
-      roughness: 0.4
+  _buildBarrierPoints() {
+    const halfW = this.width / 2 + 14;
+    this.barriers = { left: [], right: [] };
+    for (let i = 0; i < this.centerline.length; i += 2) {
+      const { p, normX, normY } = this.frameAt(i);
+      this.barriers.left.push({ x: p.x + normX * halfW, y: p.y + normY * halfW });
+      this.barriers.right.push({ x: p.x - normX * halfW, y: p.y - normY * halfW });
+    }
+  }
+
+  /** Draws the road surface, lane markings, edge glow and barriers onto a 2D context (world space). */
+  draw(ctx) {
+    // Road surface
+    ctx.fillStyle = this.options.roadColor;
+    ctx.beginPath();
+    ctx.moveTo(this.leftEdge[0].x, this.leftEdge[0].y);
+    for (let i = 1; i < this.leftEdge.length; i++) ctx.lineTo(this.leftEdge[i].x, this.leftEdge[i].y);
+    for (let i = this.rightEdge.length - 1; i >= 0; i--) ctx.lineTo(this.rightEdge[i].x, this.rightEdge[i].y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Edge glow lines
+    ctx.strokeStyle = this.options.lineColor;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.8;
+    [this.leftEdge, this.rightEdge].forEach(edge => {
+      ctx.beginPath();
+      ctx.moveTo(edge[0].x, edge[0].y);
+      for (let i = 1; i < edge.length; i++) ctx.lineTo(edge[i].x, edge[i].y);
+      ctx.closePath();
+      ctx.stroke();
     });
+    ctx.globalAlpha = 1;
 
-    const instanceStep = 3;
-    const count = Math.ceil(n / instanceStep) * 2;
-    const mesh = new THREE.InstancedMesh(barrierGeo, barrierMat, count);
-    mesh.castShadow = true;
-    let idx = 0;
-    const dummy = new THREE.Object3D();
+    // Dashed center line
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 12]);
+    ctx.beginPath();
+    ctx.moveTo(this.centerline[0].x, this.centerline[0].y);
+    for (let i = 1; i < this.centerline.length; i++) ctx.lineTo(this.centerline[i].x, this.centerline[i].y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-    for (let i = 0; i < n; i += instanceStep) {
-      const { p, dir, normal } = this._getFrame(i);
-      const angle = -Math.atan2(dir.x, dir.z);
-      [-1, 1].forEach(side => {
-        const pos = new THREE.Vector3().copy(p).addScaledVector(normal, side * halfW);
-        dummy.position.set(pos.x, 0.5, pos.z);
-        dummy.rotation.set(0, angle, 0);
-        dummy.updateMatrix();
-        if (idx < count) {
-          mesh.setMatrixAt(idx, dummy.matrix);
-          idx++;
-        }
+    // Barriers
+    ctx.fillStyle = this.options.barrierColor;
+    [this.barriers.left, this.barriers.right].forEach(edge => {
+      edge.forEach(pt => {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+        ctx.fill();
       });
+    });
+
+    // Start/finish line
+    const startFrame = this.frameAt(0);
+    ctx.save();
+    ctx.translate(startFrame.p.x, startFrame.p.y);
+    ctx.rotate(Math.atan2(startFrame.dirY, startFrame.dirX));
+    ctx.fillStyle = '#ffffff';
+    const checkerCount = 6;
+    const cw = this.width / checkerCount;
+    for (let i = 0; i < checkerCount; i++) {
+      if (i % 2 === 0) ctx.fillRect(-this.width / 2 + i * cw, -4, cw, 8);
     }
-    mesh.count = idx;
-    this.group.add(mesh);
-    this.barrierMesh = mesh;
+    ctx.restore();
   }
 
-  _buildStartLine() {
-    const halfW = this.options.width / 2;
-    const { p, dir, normal } = this._getFrame(0);
-    const angle = -Math.atan2(dir.x, dir.z);
-    const checker = new THREE.Mesh(
-      new THREE.PlaneGeometry(this.options.width, 3),
-      new THREE.MeshBasicMaterial({ color: 0xffffff })
-    );
-    checker.rotation.x = -Math.PI / 2;
-    checker.rotation.z = angle;
-    checker.position.set(p.x, 0.035, p.z);
-    this.group.add(checker);
-    void halfW; void normal;
-    this.startPoint = p.clone();
-    this.startHeading = Math.atan2(dir.x, dir.z);
-  }
-
-  /** Returns { distance, offRoad } for a world point, by scanning nearby centerline samples. */
-  distanceFromCenter(x, z, searchIndexHint = -1) {
+  distanceFromCenter(x, y, searchIndexHint = -1) {
     let best = Infinity;
     const n = this.centerline.length;
     let start = 0, end = n;
@@ -183,22 +161,21 @@ export class TrackBuilder {
     }
     for (let i = start; i < end; i++) {
       const p = this.centerline[i];
-      const d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+      const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
       if (d < best) best = d;
     }
     return Math.sqrt(best);
   }
 
-  isOffRoad(x, z, indexHint = -1) {
-    return this.distanceFromCenter(x, z, indexHint) > this.options.width / 2 + 0.5;
+  isOffRoad(x, y, indexHint = -1) {
+    return this.distanceFromCenter(x, y, indexHint) > this.width / 2 + 4;
   }
 
-  /** Finds nearest centerline index by brute force (used sparingly - for progress/checkpoints). */
-  nearestIndex(x, z) {
+  nearestIndex(x, y) {
     let best = Infinity, bestI = 0;
     for (let i = 0; i < this.centerline.length; i++) {
       const p = this.centerline[i];
-      const d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+      const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
       if (d < best) { best = d; bestI = i; }
     }
     return bestI;

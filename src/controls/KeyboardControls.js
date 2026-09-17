@@ -15,11 +15,10 @@ export class KeyboardControls {
     const nitro = this.keys['Space'];
 
     let steer = 0;
-    // NOTE: positive `steer` turns the car right on screen (matches the chase camera).
-    // Given how heading/position are computed, pressing the RIGHT key must produce a
-    // NEGATIVE steer value here - see TouchControls.js for the matching mapping.
-    if (left) steer += 1;
-    if (right) steer -= 1;
+    // In this top-down 2D view, increasing heading turns the car clockwise (right),
+    // so RIGHT/D maps directly to +1 - no sign flip needed.
+    if (left) steer -= 1;
+    if (right) steer += 1;
 
     return {
       throttle: up ? 1 : 0,

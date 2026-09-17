@@ -22,10 +22,7 @@ export class RaceManager {
     const heading = this.track.startHeading;
 
     const playerDef = getCarById(playerCarId);
-    this.player = new PlayerCar(playerDef, start.x, start.z, heading);
-    this.player.isPlayer = true;
-    this.player.name = 'YOU';
-    trackData.scene.add(this.player.mesh);
+    this.player = new PlayerCar(playerDef, start.x, start.y, heading);
 
     this.aiCars = [];
     if (mode !== 'free-drive' && mode !== 'time-trial') {
@@ -37,7 +34,6 @@ export class RaceManager {
         const offsetIndex = (this._findStartIndex() - (i + 1) * 2 + this.n) % this.n;
         const ai = new AICar(def, this.track, offsetIndex, AI_SKILL_SPREAD[i % AI_SKILL_SPREAD.length]);
         ai.name = 'RIVAL ' + (i + 1);
-        trackData.scene.add(ai.mesh);
         this.aiCars.push(ai);
       }
     }
@@ -48,7 +44,7 @@ export class RaceManager {
   }
 
   _findStartIndex() {
-    return this.track.nearestIndex(this.track.startPoint.x, this.track.startPoint.z);
+    return this.track.nearestIndex(this.track.startPoint.x, this.track.startPoint.y);
   }
 
   beginRace() {
@@ -91,7 +87,7 @@ export class RaceManager {
   }
 
   _trackLapProgress(car) {
-    const idx = this.track.nearestIndex(car.state.x, car.state.z);
+    const idx = this.track.nearestIndex(car.state.x, car.state.y);
     if (car._lastIdx === undefined) car._lastIdx = idx;
 
     // Detect crossing the start/finish line (index wraps from near-end to near-zero)
@@ -148,8 +144,13 @@ export class RaceManager {
     };
   }
 
+  /** Draws every car onto a 2D context that's already in world space (camera transform applied). */
+  drawCars(ctx) {
+    this.aiCars.forEach(ai => ai.draw(ctx));
+    this.player.draw(ctx);
+  }
+
   dispose() {
-    this.trackData.scene.remove(this.player.mesh);
-    this.aiCars.forEach(ai => this.trackData.scene.remove(ai.mesh));
+    // No GPU resources to free in the 2D canvas renderer - nothing to do here.
   }
 }

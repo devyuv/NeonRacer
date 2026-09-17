@@ -1,7 +1,6 @@
-import * as THREE from 'three';
 import { GameState } from './GameState.js';
 import { RaceManager } from './RaceManager.js';
-import { ChaseCamera } from './Camera.js';
+import { FollowCamera2D } from './Camera.js';
 import { TRACK_LIST, buildTrack } from '../tracks/index.js';
 import { CARS } from '../cars/CarData.js';
 import { DeviceDetection } from '../utils/DeviceDetection.js';
@@ -30,13 +29,13 @@ export class Game {
 
     this.deferredInstallPrompt = null;
     this.raceManager = null;
-    this.chaseCamera = null;
-    this.renderer = null;
-    this.camera = null;
+    this.camera = new FollowCamera2D();
+    this.canvas = null;
+    this.ctx = null;
     this.currentTrackData = null;
     this.animHandle = null;
     this.paused = false;
-    this.clock = new THREE.Clock();
+    this._lastTime = 0;
     this._raceScreenActive = false;
 
     this._initInstallPrompt();
@@ -59,7 +58,7 @@ export class Game {
     setProgress(10, 'Checking device capabilities...');
     await this._nextFrame();
 
-    if (!DeviceDetection.supportsWebGL()) {
+    if (!DeviceDetection.supportsCanvas2D()) {
       this._showScreen('webgl-error');
       return;
     }
@@ -86,32 +85,28 @@ export class Game {
 
   _initRenderer() {
     const container = document.getElementById('canvas-container');
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.state.settings.graphics !== 'low', powerPreference: 'high-performance' });
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d');
+    container.appendChild(this.canvas);
     this._applyRendererQuality();
-    container.appendChild(this.renderer.domElement);
-
-    this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 800);
-    this.chaseCamera = new ChaseCamera(this.camera);
   }
 
   _applyRendererQuality() {
-    if (!this.renderer) return;
+    if (!this.canvas) return;
     const tier = this.state.settings.graphics;
-    const pr = tier === 'high' ? Math.min(window.devicePixelRatio, 2) : tier === 'medium' ? Math.min(window.devicePixelRatio, 1.5) : 1;
-    this.renderer.setPixelRatio(pr);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.shadowMap.enabled = tier !== 'low';
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const dpr = tier === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : tier === 'medium' ? Math.min(window.devicePixelRatio || 1, 1.5) : 1;
+    this._dpr = dpr;
+    const w = window.innerWidth, h = window.innerHeight;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this._cssWidth = w;
+    this._cssHeight = h;
   }
 
   _onResize() {
-    if (this.camera) {
-      this.camera.aspect = window.innerWidth / window.innerHeight;
-      this.camera.updateProjectionMatrix();
-    }
-    if (this.renderer) {
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    if (this.canvas) this._applyRendererQuality();
     this._updateRotateHint();
   }
 
@@ -304,12 +299,11 @@ export class Game {
   // ---------- Race flow ----------
 
   _startRace() {
-    if (!this.renderer) this._initRenderer();
-    this._teardownRace(); // clear any previous race scene
+    if (!this.canvas) this._initRenderer();
+    this._teardownRace(); // clear any previous race
 
     const trackData = buildTrack(this.state.selectedTrackId, this.state.settings.graphics);
     this.currentTrackData = trackData;
-    this._setupLighting(trackData);
 
     this.raceManager = new RaceManager({
       trackData,
@@ -319,7 +313,7 @@ export class Game {
       onPlayerCollision: () => this._onPlayerCollision()
     });
 
-    this.chaseCamera._initialized = false;
+    this.camera._initialized = false;
     this.audio.startEngine();
 
     this._showScreen('race-screen');
@@ -331,29 +325,9 @@ export class Game {
     this._runCountdown(() => {
       this.raceManager.beginRace();
       this.hud.show();
-      this.clock.getDelta(); // reset delta accumulation
+      this._lastTime = performance.now();
       this._loop();
     });
-  }
-
-  _setupLighting(trackData) {
-    const scene = trackData.scene;
-    scene.fog = trackData.fog;
-    const ambient = new THREE.AmbientLight(trackData.ambientColor || 0x2a2f4a, 0.8);
-    scene.add(ambient);
-    const sun = new THREE.DirectionalLight(trackData.sunColor || 0xbcd8ff, 0.9);
-    sun.position.set(60, 90, 40);
-    if (this.state.settings.graphics !== 'low') {
-      sun.castShadow = true;
-      sun.shadow.mapSize.set(this.state.settings.graphics === 'high' ? 2048 : 1024, this.state.settings.graphics === 'high' ? 2048 : 1024);
-      sun.shadow.camera.left = -80;
-      sun.shadow.camera.right = 80;
-      sun.shadow.camera.top = 80;
-      sun.shadow.camera.bottom = -80;
-      sun.shadow.camera.far = 300;
-    }
-    scene.add(sun);
-    this.scene = scene;
   }
 
   _runCountdown(onComplete) {
@@ -377,13 +351,17 @@ export class Game {
     if (this.paused || !this.raceManager) return;
     this.animHandle = requestAnimationFrame(() => this._loop());
 
-    const dt = Math.min(0.05, this.clock.getDelta());
-    const input = this._getCombinedInput();
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - this._lastTime) / 1000);
+    this._lastTime = now;
 
+    const input = this._getCombinedInput();
     this.raceManager.update(dt, input);
 
     const p = this.raceManager.player;
-    this.chaseCamera.update(dt, p.mesh, p.state, p.def.physics.maxSpeed * p.def.physics.nitroMultiplier);
+    const maxSpeedWithNitro = p.def.physics.maxSpeed * p.def.physics.nitroMultiplier;
+    const speedRatio = Math.abs(p.state.speed) / maxSpeedWithNitro;
+    this.camera.update(dt, p.state.x, p.state.y, speedRatio);
     this.audio.updateEngine(Math.abs(p.state.speed) / p.def.physics.maxSpeed);
 
     const ranked = this.raceManager.getPositions();
@@ -398,11 +376,26 @@ export class Game {
       showLapCounter: this.raceManager.mode !== 'free-drive'
     });
 
-    this.renderer.render(this.scene, this.camera);
+    this._render();
 
     if (this.raceManager.finished) {
       this._onRaceFinished();
     }
+  }
+
+  _render() {
+    const ctx = this.ctx;
+    const w = this._cssWidth, h = this._cssHeight;
+    ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+    ctx.fillStyle = this.currentTrackData.backgroundColor || '#0a0a14';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    this.camera.apply(ctx, w, h);
+    const viewBounds = this.camera.getViewBounds(w, h);
+    this.currentTrackData.draw(ctx, viewBounds);
+    this.raceManager.drawCars(ctx);
+    ctx.restore();
   }
 
   _getCombinedInput() {
@@ -417,7 +410,7 @@ export class Game {
   }
 
   _onPlayerCollision() {
-    this.chaseCamera.triggerShake(0.4, 0.3);
+    this.camera.triggerShake(8, 0.3);
     this.audio.playCollision();
     DeviceDetection.vibrate(this.state.settings.vibration === 'on' ? 60 : 0);
   }
@@ -466,7 +459,7 @@ export class Game {
   _resumeRace() {
     document.getElementById('pause-overlay').classList.add('hidden');
     this.paused = false;
-    this.clock.getDelta();
+    this._lastTime = performance.now();
     this._loop();
   }
 
@@ -484,18 +477,7 @@ export class Game {
       this.raceManager.dispose();
       this.raceManager = null;
     }
-    if (this.currentTrackData) {
-      // dispose geometries/materials for the outgoing scene to free GPU memory
-      this.currentTrackData.scene.traverse(obj => {
-        if (obj.geometry) obj.geometry.dispose();
-        if (obj.material) {
-          if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-          else obj.material.dispose();
-        }
-      });
-      this.currentTrackData = null;
-    }
-    if (this.scene) this.scene = null;
+    this.currentTrackData = null;
   }
 
   // ---------- PWA install ----------

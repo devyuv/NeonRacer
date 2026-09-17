@@ -21,6 +21,15 @@ export const DeviceDetection = {
     }
   },
 
+  supportsCanvas2D() {
+    try {
+      const canvas = document.createElement('canvas');
+      return !!(canvas.getContext && canvas.getContext('2d'));
+    } catch (e) {
+      return false;
+    }
+  },
+
   supportsVibration() {
     return 'vibrate' in navigator;
   },

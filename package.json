@@ -1,16 +1,14 @@
 {
-  "name": "neon-racer-3d",
-  "version": "1.0.0",
-  "description": "NEON RACER 3D - an original arcade-style 3D racing PWA built with Three.js",
+  "name": "neon-racer",
+  "version": "2.0.0",
+  "description": "NEON RACER - an original top-down arcade-style 2D racing PWA built with HTML5 Canvas",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "three": "^0.160.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "vite": "^5.2.0"
   }

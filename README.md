@@ -1,11 +1,13 @@
-# NEON RACER 3D
+# NEON RACER
 
-An original, mobile-first arcade 3D racing game built with **Three.js**, packaged as an
-installable **Progressive Web App**. Drift and boost through a neon-lit city circuit
-against 5 AI rivals, across Quick Race, Time Trial, Championship, and Free Drive modes.
+An original, mobile-first **2D top-down** arcade racing game built with plain
+**HTML5 Canvas** (no rendering libraries at all), packaged as an installable
+**Progressive Web App**. Drift and boost through a neon-lit city circuit against 5 AI
+rivals, across Quick Race, Time Trial, Championship, and Free Drive modes.
 
-Everything here — the car designs, track, UI, and sound — is original and generated
-procedurally in code. Nothing is copied from any existing game.
+Everything here — the car sprites, track, UI, and sound — is original and generated
+procedurally in code. Nothing is copied from any existing game, and there are no
+external image/audio assets to license.
 
 ---
 
@@ -36,7 +38,7 @@ The build output goes to `dist/`.
 ## 3. Deploy to GitHub + Vercel
 
 ### Step 1 — Create a GitHub repository
-1. Go to [github.com/new](https://github.com/new) and create a new repository (e.g. `neon-racer-3d`).
+1. Go to [github.com/new](https://github.com/new) and create a new repository (e.g. `neon-racer`).
 2. Do **not** initialize it with a README (you already have one here).
 
 ### Step 2 — Push this project
@@ -44,15 +46,15 @@ From inside this project folder:
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Neon Racer 3D"
+git commit -m "Initial commit: Neon Racer"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/neon-racer-3d.git
+git remote add origin https://github.com/YOUR_USERNAME/neon-racer.git
 git push -u origin main
 ```
 
 ### Step 3 — Connect the repository to Vercel
 1. Go to [vercel.com/new](https://vercel.com/new) and sign in (GitHub login is easiest).
-2. Click **Import** next to your `neon-racer-3d` repository.
+2. Click **Import** next to your `neon-racer` repository.
 3. Vercel auto-detects the **Vite** framework preset. Confirm these build settings:
    - **Build Command:** `npm run build`
    - **Output Directory:** `dist`
@@ -75,7 +77,7 @@ required — the free Vercel tier is sufficient.
 ## 4. Project structure
 
 ```
-neon-racer-3d/
+neon-racer/
 ├── index.html              Single HTML shell with all screen containers
 ├── package.json
 ├── vite.config.js
@@ -90,17 +92,17 @@ neon-racer-3d/
     │   ├── Game.js           Screen flow, render loop, settings, PWA install
     │   ├── GameState.js      Wraps saved progress + session selections
     │   ├── RaceManager.js    Countdown, laps, positions, race timer, results
-    │   ├── Physics.js        Shared arcade car physics stepper
+    │   ├── Physics.js        Top-down arcade car physics stepper
     │   ├── Collision.js      Car-car and car-barrier collision resolution
-    │   └── Camera.js         Third-person chase camera (tilt/shake/FOV)
+    │   └── Camera.js         2D follow camera (smoothing/zoom/shake)
     ├── cars/
     │   ├── CarData.js        Car stat/tuning definitions (3 original cars)
-    │   ├── CarModel.js       Procedural low-poly car mesh builder
+    │   ├── CarModel.js       Procedural 2D top-down car sprite (Canvas 2D drawing)
     │   ├── PlayerCar.js      Player car wrapper (input-driven)
     │   └── AICar.js          AI car wrapper (spline-following + overtaking)
     ├── tracks/
     │   ├── index.js          Track registry (Neon City implemented; two more stubbed)
-    │   ├── TrackManager.js   Generic control-point -> road/barrier mesh builder
+    │   ├── TrackManager.js   Generic control-point -> road polygon builder (Catmull-Rom)
     │   └── NeonCity.js       Neon City track layout + decorations
     ├── ui/
     │   ├── MainMenu.js, HUD.js, Garage.js, Results.js, Settings.js
@@ -111,7 +113,7 @@ neon-racer-3d/
     │   └── AudioManager.js   Procedurally synthesized SFX/engine sound (see below)
     └── utils/
         ├── Storage.js        localStorage save/load
-        └── DeviceDetection.js WebGL/touch/mobile/vibration detection
+        └── DeviceDetection.js Canvas/touch/mobile/vibration detection
 ```
 
 Adding a new track later is just: write a new file like `NeonCity.js` with a different
@@ -120,7 +122,15 @@ list of control points and decorations, then register it in `tracks/index.js` an
 
 ---
 
-## 5. Audio note
+## 5. How the 2D view works
+
+The camera is a simple top-down "follow cam": it centers on the player's car, zooms out
+slightly at high speed, and shakes briefly on collisions. The world stays north-up at all
+times — cars rotate to face their heading, the camera does not rotate. Everything is
+drawn with plain Canvas 2D calls (`fillRect`, `arc`, paths) — there's no WebGL, no 3D
+library, and no external image files.
+
+## 6. Audio note
 
 There are no bundled audio files. `AudioManager.js` synthesizes all sound effects and the
 engine note live with the WebAudio API, so the game never ships with unlicensed or
@@ -133,7 +143,7 @@ like richer music/SFX:
 
 ---
 
-## 6. Controls
+## 7. Controls
 
 **Touch:** on-screen LEFT / RIGHT steer buttons, BRAKE, and NITRO. The car
 auto-accelerates unless you're braking, so both thumbs stay free for steering and nitro.
@@ -148,16 +158,19 @@ toggle is also available in Settings → Control Type, and both stay in sync.
 
 ---
 
-## 7. Testing checklist
+## 8. Testing checklist
 
 Verified by code review and manual reasoning during development:
 - [x] Project structure has no dangling imports (every imported module file exists)
-- [x] `npm run build` targets are standard Vite/Three.js and should build cleanly
-- [x] WebGL support check shows a graceful fallback screen if unsupported
+- [x] No remaining references to Three.js/WebGL anywhere in the code or dependencies
+- [x] Canvas 2D support check shows a graceful fallback screen if unsupported
 - [x] Touch controls use `touchstart`/`touchend`/`pointerdown`/`pointerup` with
       `preventDefault` to avoid scroll interference, and `touch-action: none` is set globally
+- [x] Native pinch/rotate gestures are blocked (`gesturestart`/`gesturechange`/`gestureend`)
+      so two-finger button presses can't spin or zoom the page
 - [x] LocalStorage save/load has a try/catch fallback to defaults if corrupted
-- [x] Manifest JSON is valid and icons are referenced with matching paths/sizes
+- [x] Manifest JSON is valid and icons are referenced with matching paths/sizes; no forced
+      orientation lock (the game asks the player to rotate, rather than forcing it)
 - [x] Service worker uses a safe versioned-cache activate/cleanup pattern
 
 **Not actually executed in a browser or on Vercel by the author of this code** (no
@@ -168,9 +181,9 @@ the terminal output and feel free to paste it back for a fix.
 
 ---
 
-## 8. Performance & graphics settings
+## 9. Performance & graphics settings
 
-Settings → Graphics (LOW / MEDIUM / HIGH) controls: shadow map on/off and resolution,
-device pixel ratio cap, and decoration density (buildings/trees/streetlights) on the
-track. The game auto-picks a starting tier based on device cores/memory, biased toward
-LOW/MEDIUM on phones.
+Settings → Graphics (LOW / MEDIUM / HIGH) controls: device pixel ratio cap and decoration
+density (buildings/trees/streetlights) on the track. Being 2D Canvas rather than 3D/WebGL,
+this game is dramatically lighter on battery and works well even on older phones. The game
+auto-picks a starting tier based on device cores/memory, biased toward LOW/MEDIUM on phones.

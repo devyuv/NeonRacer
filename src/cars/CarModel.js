@@ -1,122 +1,99 @@
-import * as THREE from 'three';
+// Draws an original, simple top-down car sprite using Canvas 2D primitives only -
+// no external images, no copyrighted designs. Assumes the canvas context is already
+// translated to the car's position and rotated by its heading; the car is drawn
+// centered at the origin, pointing "up" (-Y) as forward.
 
-// Builds an original, simple procedural sports-car mesh out of primitive geometry.
-// No external assets, no copyrighted designs - just an abstract low-poly car.
-export function buildCarMesh(carDef, { withLights = true } = {}) {
-  const group = new THREE.Group();
-  group.name = 'car-' + carDef.id;
+const LENGTH = 34;
+const WIDTH = 18;
 
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: carDef.color,
-    metalness: 0.55,
-    roughness: 0.35,
-    envMapIntensity: 1.0
-  });
-  const accentMat = new THREE.MeshStandardMaterial({
-    color: carDef.accentColor,
-    metalness: 0.3,
-    roughness: 0.5
-  });
-  const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x111a22,
-    metalness: 0.9,
-    roughness: 0.1,
-    transparent: true,
-    opacity: 0.75
-  });
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x0c0c10, metalness: 0.6, roughness: 0.6 });
+export function drawCar(ctx, carDef, { braking = false, nitroActive = false, driftAmount = 0 } = {}) {
+  const halfL = LENGTH / 2;
+  const halfW = WIDTH / 2;
 
-  // Lower chassis
-  const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.32, 4.0), bodyMat);
-  chassis.position.y = 0.36;
-  chassis.castShadow = true;
-  chassis.receiveShadow = true;
-  group.add(chassis);
+  ctx.save();
 
-  // Cabin / cockpit (tapered using scaled box for speed rather than heavy geometry)
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.42, 1.7), glassMat);
-  cabin.position.set(0, 0.72, -0.1);
-  cabin.castShadow = true;
-  group.add(cabin);
-
-  // Nose wedge (front)
-  const noseGeo = new THREE.ConeGeometry(1.05, 1.1, 4);
-  const nose = new THREE.Mesh(noseGeo, bodyMat);
-  nose.rotation.x = Math.PI / 2;
-  nose.rotation.y = Math.PI / 4;
-  nose.scale.set(0.95, 0.4, 1);
-  nose.position.set(0, 0.42, 2.0);
-  nose.castShadow = true;
-  group.add(nose);
-
-  // Rear spoiler
-  const spoilerStand1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), darkMat);
-  spoilerStand1.position.set(-0.7, 0.85, -1.85);
-  group.add(spoilerStand1);
-  const spoilerStand2 = spoilerStand1.clone();
-  spoilerStand2.position.x = 0.7;
-  group.add(spoilerStand2);
-  const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.06, 0.45), accentMat);
-  spoilerWing.position.set(0, 1.02, -1.85);
-  spoilerWing.castShadow = true;
-  group.add(spoilerWing);
-
-  // Side skirts / accent stripe
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.06, 3.6), accentMat);
-  stripe.position.y = 0.5;
-  group.add(stripe);
-
-  // Wheels
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 12);
-  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.2, roughness: 0.8 });
-  const wheelPositions = [
-    [-0.95, 0.42, 1.3], [0.95, 0.42, 1.3],
-    [-0.95, 0.42, -1.3], [0.95, 0.42, -1.3]
-  ];
-  const wheels = [];
-  wheelPositions.forEach(([x, y, z]) => {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, y, z);
-    wheel.castShadow = true;
-    group.add(wheel);
-    wheels.push(wheel);
-  });
-
-  // Headlights
-  const headlightMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.6 });
-  const headlightGeo = new THREE.BoxGeometry(0.28, 0.12, 0.08);
-  const hl1 = new THREE.Mesh(headlightGeo, headlightMat);
-  hl1.position.set(-0.62, 0.46, 2.45);
-  group.add(hl1);
-  const hl2 = hl1.clone();
-  hl2.position.x = 0.62;
-  group.add(hl2);
-
-  // Brake lights (emissive toggled at runtime via material)
-  const brakeMat = new THREE.MeshStandardMaterial({ color: 0xff2233, emissive: 0xff0000, emissiveIntensity: 0.4 });
-  const brakeGeo = new THREE.BoxGeometry(0.32, 0.14, 0.06);
-  const bl1 = new THREE.Mesh(brakeGeo, brakeMat);
-  bl1.position.set(-0.6, 0.55, -2.02);
-  group.add(bl1);
-  const bl2 = bl1.clone();
-  bl2.position.x = 0.6;
-  group.add(bl2);
-
-  let headlightLights = [];
-  if (withLights) {
-    const spot = new THREE.PointLight(0xbfe9ff, 0.6, 8, 2);
-    spot.position.set(0, 0.5, 2.6);
-    group.add(spot);
-    headlightLights.push(spot);
+  // Slight drift skew for visual feel
+  if (driftAmount > 0.05) {
+    ctx.rotate(driftAmount * 0.18);
   }
 
-  group.traverse(obj => { if (obj.isMesh) { obj.castShadow = true; } });
+  // Nitro exhaust flame (drawn first, behind the car)
+  if (nitroActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    const flameLen = 16 + Math.random() * 10;
+    const grad = ctx.createLinearGradient(0, halfL, 0, halfL + flameLen);
+    grad.addColorStop(0, '#ffd400');
+    grad.addColorStop(1, 'rgba(255,0,200,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-5, halfL);
+    ctx.lineTo(5, halfL);
+    ctx.lineTo(0, halfL + flameLen);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
-  return {
-    group,
-    wheels,
-    brakeMaterial: brakeMat,
-    headlightLights
-  };
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#000000';
+  ctx.beginPath();
+  ctx.ellipse(2, 3, halfW + 2, halfL, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Wheels (small dark rects at the four corners)
+  ctx.fillStyle = '#111114';
+  const wheelW = 4, wheelL = 9;
+  [[-halfW - 1, -halfL + 8], [halfW - 3, -halfL + 8], [-halfW - 1, halfL - 12], [halfW - 3, halfL - 12]].forEach(([wx, wy]) => {
+    ctx.fillRect(wx, wy, wheelW, wheelL);
+  });
+
+  // Body
+  const bodyColor = '#' + carDef.color.toString(16).padStart(6, '0');
+  const accentColor = '#' + carDef.accentColor.toString(16).padStart(6, '0');
+  ctx.fillStyle = bodyColor;
+  roundRect(ctx, -halfW, -halfL, WIDTH, LENGTH, 6);
+  ctx.fill();
+
+  // Accent center stripe
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(-2, -halfL + 2, 4, LENGTH - 4);
+
+  // Cockpit / windshield
+  ctx.fillStyle = 'rgba(15, 22, 32, 0.85)';
+  roundRect(ctx, -halfW + 3, -halfL * 0.15, WIDTH - 6, halfL * 0.75, 4);
+  ctx.fill();
+
+  // Headlights (front = -Y)
+  ctx.fillStyle = '#fffef0';
+  ctx.shadowColor = '#fffef0';
+  ctx.shadowBlur = 6;
+  ctx.fillRect(-halfW + 1, -halfL + 1, 4, 3);
+  ctx.fillRect(halfW - 5, -halfL + 1, 4, 3);
+  ctx.shadowBlur = 0;
+
+  // Brake lights (rear = +Y)
+  ctx.fillStyle = braking ? '#ff2233' : '#7a1420';
+  if (braking) { ctx.shadowColor = '#ff2233'; ctx.shadowBlur = 8; }
+  ctx.fillRect(-halfW + 1, halfL - 4, 4, 3);
+  ctx.fillRect(halfW - 5, halfL - 4, 4, 3);
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
 }
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+export const CAR_LENGTH = LENGTH;
+export const CAR_WIDTH = WIDTH;

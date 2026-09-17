@@ -1,6 +1,6 @@
 import { applyCollisionImpulse } from './Physics.js';
 
-const CAR_RADIUS = 1.3;
+const CAR_RADIUS = 14;
 
 /** Resolves simple circle-circle collisions between all provided car states. */
 export function resolveCarCollisions(cars, onPlayerHit) {
@@ -8,19 +8,19 @@ export function resolveCarCollisions(cars, onPlayerHit) {
     for (let j = i + 1; j < cars.length; j++) {
       const a = cars[i], b = cars[j];
       const dx = b.state.x - a.state.x;
-      const dz = b.state.z - a.state.z;
-      const dist = Math.hypot(dx, dz);
+      const dy = b.state.y - a.state.y;
+      const dist = Math.hypot(dx, dy);
       const minDist = CAR_RADIUS * 2;
       if (dist < minDist && dist > 0.001) {
         const overlap = (minDist - dist) / 2;
-        const nx = dx / dist, nz = dz / dist;
+        const nx = dx / dist, ny = dy / dist;
         a.state.x -= nx * overlap;
-        a.state.z -= nz * overlap;
+        a.state.y -= ny * overlap;
         b.state.x += nx * overlap;
-        b.state.z += nz * overlap;
+        b.state.y += ny * overlap;
 
-        applyCollisionImpulse(a.state, -nx, -nz, 4);
-        applyCollisionImpulse(b.state, nx, nz, 4);
+        applyCollisionImpulse(a.state, -nx, -ny, 4);
+        applyCollisionImpulse(b.state, nx, ny, 4);
 
         if (onPlayerHit && (a.isPlayer || b.isPlayer)) {
           onPlayerHit();
@@ -32,19 +32,15 @@ export function resolveCarCollisions(cars, onPlayerHit) {
 
 /** Keeps a car within the barrier bounds of the track, bouncing it back if it goes too far off. */
 export function resolveTrackBounds(carState, track, onPlayerHit, isPlayer) {
-  const idx = track.nearestIndex ? null : null; // reserved for future optimization
-  void idx;
-  const dist = track.distanceFromCenter(carState.x, carState.z);
-  const hardLimit = track.options.width / 2 + 6;
+  const dist = track.distanceFromCenter(carState.x, carState.y);
+  const hardLimit = track.width / 2 + 34;
   if (dist > hardLimit) {
-    // Push back toward the nearest centerline point
-    const nearestIdx = track.nearestIndex(carState.x, carState.z);
+    const nearestIdx = track.nearestIndex(carState.x, carState.y);
     const p = track.centerline[nearestIdx];
-    const dx = carState.x - p.x, dz = carState.z - p.z;
-    const len = Math.hypot(dx, dz) || 1;
-    const clampedDist = hardLimit;
-    carState.x = p.x + (dx / len) * clampedDist;
-    carState.z = p.z + (dz / len) * clampedDist;
+    const dx = carState.x - p.x, dy = carState.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    carState.x = p.x + (dx / len) * hardLimit;
+    carState.y = p.y + (dy / len) * hardLimit;
     carState.speed *= 0.4;
     carState.collisionFlash = 0.3;
     if (isPlayer && onPlayerHit) onPlayerHit();

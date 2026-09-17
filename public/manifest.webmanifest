@@ -1,7 +1,7 @@
 {
-  "name": "NEON RACER 3D",
+  "name": "NEON RACER",
   "short_name": "NeonRacer",
-  "description": "An original arcade-style 3D racing game. Drift, boost and race through a neon city circuit against AI rivals.",
+  "description": "An original top-down arcade-style 2D racing game. Drift, boost and race through a neon city circuit against AI rivals.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
